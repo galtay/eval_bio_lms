@@ -1,3 +1,8 @@
+# local directories to ignore
+data
+eval
+plot_results_scratch.ipynb
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
