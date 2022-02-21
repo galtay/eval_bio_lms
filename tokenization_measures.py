@@ -10,16 +10,16 @@ from datasets import load_dataset
 import pandas as pd
 from transformers import AutoTokenizer
 
+from preprocessing import tokenize_map
 
-data_files = "/home/galtay/data/mimic_sandbox/mimic-iii-clinical-database-1.4/NOTEEVENTS.csv.gz"
+
+data_files = (
+    "/home/galtay/data/mimic_sandbox/mimic-iii-clinical-database-1.4/NOTEEVENTS.csv.gz"
+)
 ds = load_dataset("mimic_noteevents.py", data_files=data_files, split="train")
 ds = ds.select(range(1000))
 TEXT_COL = "text"
 NUM_PROC = 24
-
-
-def tokenize_map(examples):
-    return tokenizer(examples[TEXT_COL])
 
 
 model_names = [
@@ -41,19 +41,26 @@ df_num_toks = pd.DataFrame()
 for model_name in model_names:
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
-    remove_columns = [col for col in ds.column_names if col != TEXT_COL]
+
+    # normally we drop all columns
+    # keeping text column here just for convenience
     ds_tokenized = ds.map(
         tokenize_map,
         batched=True,
         num_proc=NUM_PROC,
-        remove_columns=remove_columns,
+        remove_columns=[col for col in ds.column_names if col != TEXT_COL],
+        fn_kwargs={
+            "tokenizer": tokenizer,
+            "text_col": TEXT_COL,
+            "return_special_tokens_mask": False,
+        },
     )
 
     df = ds_tokenized.to_pandas()
 
-    print(tokenizer.convert_ids_to_tokens(df.iloc[0]['input_ids']))
+    print(tokenizer.convert_ids_to_tokens(df.iloc[0]["input_ids"]))
 
-    df_num_toks[model_name] = df['input_ids'].apply(len)
+    df_num_toks[model_name] = df["input_ids"].apply(len)
 
 
-df_num_toks.to_csv('data/corpus_token_counts.csv', index=False)
+df_num_toks.to_csv("data/corpus_token_counts.csv", index=False)
