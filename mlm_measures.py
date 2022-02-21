@@ -15,6 +15,9 @@ from transformers import AutoModelForMaskedLM
 from transformers import Trainer, TrainingArguments
 from transformers import DataCollatorForLanguageModeling
 
+from preprocessing import tokenize_map
+from preprocessing import group_texts_map
+
 
 data_files = (
     "/home/galtay/data/mimic_sandbox/mimic-iii-clinical-database-1.4/NOTEEVENTS.csv.gz"

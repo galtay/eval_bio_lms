@@ -42,7 +42,7 @@ for model_name in model_names:
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-    # normally we drop all columns
+    # normally we drop all input columns
     # keeping text column here just for convenience
     ds_tokenized = ds.map(
         tokenize_map,
@@ -52,7 +52,6 @@ for model_name in model_names:
         fn_kwargs={
             "tokenizer": tokenizer,
             "text_col": TEXT_COL,
-            "return_special_tokens_mask": False,
         },
     )
 

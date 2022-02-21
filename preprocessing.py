@@ -2,7 +2,7 @@ import itertools
 
 # We use `return_special_tokens_mask=True` because DataCollatorForLanguageModeling
 # (see below) is more efficient when it receives the `special_tokens_mask`.
-def tokenize_map(examples, tokenizer, text_col, return_special_tokens_mask):
+def tokenize_map(examples, tokenizer, text_col, return_special_tokens_mask=False):
     return tokenizer(
         examples[text_col], return_special_tokens_mask=return_special_tokens_mask
     )
