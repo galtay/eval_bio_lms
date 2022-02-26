@@ -5,42 +5,26 @@ What can we measure with just the tokenizer?
 * TODO: add specific biomedical entities
 
 """
-
+import multiprocessing
 from datasets import load_dataset
 import pandas as pd
 from transformers import AutoTokenizer
 
 from preprocessing import tokenize_map
+from model_definitions import MODEL_DEFS
 
 
-data_files = (
-    "/home/galtay/data/mimic_sandbox/mimic-iii-clinical-database-1.4/NOTEEVENTS.csv.gz"
-)
-ds = load_dataset("mimic_noteevents.py", data_files=data_files, split="train")
-ds = ds.select(range(1000))
+data_files = "/mnt/disks/data1/galtay-datasets/mimiciii-1.4.physionet.org/NOTEEVENTS.csv.gz"
+ds_full = load_dataset("mimic_noteevents.py", data_files=data_files, split="train")
+ds = ds_full.select(range(10_000))
 TEXT_COL = "text"
-NUM_PROC = 24
-
-
-model_names = [
-    "bert-base-uncased",
-    "bert-base-cased",
-    "roberta-base",
-    "dmis-lab/biobert-v1.1",
-    "allenai/scibert_scivocab_uncased",
-    "allenai/scibert_scivocab_cased",
-    "microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract",
-    "microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext",
-    "emilyalsentzer/Bio_ClinicalBERT",
-    "bionlp/bluebert_pubmed_mimic_uncased_L-24_H-1024_A-16",
-    "bionlp/bluebert_pubmed_uncased_L-12_H-768_A-12",
-]
+NUM_PROC = multiprocessing.cpu_count()
 
 
 df_num_toks = pd.DataFrame()
-for model_name in model_names:
+for model_def in MODEL_DEFS:
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    tokenizer = AutoTokenizer.from_pretrained(model_def["tokenizer_checkpoint"])
 
     # normally we drop all input columns
     # keeping text column here just for convenience
@@ -59,7 +43,7 @@ for model_name in model_names:
 
     print(tokenizer.convert_ids_to_tokens(df.iloc[0]["input_ids"]))
 
-    df_num_toks[model_name] = df["input_ids"].apply(len)
+    df_num_toks[model_def["name"]] = df["input_ids"].apply(len)
 
 
 df_num_toks.to_csv("data/corpus_token_counts.csv", index=False)

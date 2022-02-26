@@ -67,7 +67,10 @@ class Mimic3NoteEventsDataset(datasets.GeneratorBasedBuilder):
             citation=_CITATION,
         )
 
-    def _split_generators(self, dl_manager: datasets.DownloadManager) -> List[datasets.SplitGenerator]:
+    def _split_generators(
+        self,
+        dl_manager: datasets.DownloadManager
+    ) -> List[datasets.SplitGenerator]:
 
         return [
             datasets.SplitGenerator(
@@ -82,20 +85,38 @@ class Mimic3NoteEventsDataset(datasets.GeneratorBasedBuilder):
     def _generate_examples(self, split):
         """Generate samples using the info passed in from _split_generators."""
 
-        df = pd.read_csv(self.config.data_files[split][0])
+        dtype = {
+            "ROW_ID": int,
+            "SUBJECT_ID": int,
+            "HADM_ID": "Int32",
+            "CHARTDATE": str,
+            "CHARTTIME": str,
+            "STORETIME": str,
+            "CATEGORY": str,
+            "DESCRIPTION": str,
+            "CGID": "Int32",
+            "ISERROR": "Int32",
+            "TEXT": str,
+        }
+        df_chunks = pd.read_csv(
+            self.config.data_files[split][0],
+            dtype=dtype,
+            chunksize=1000,
+        )
         _id = 0
-        for _, row in df.iterrows():
-            yield _id, {
-                "row_id": row["ROW_ID"],
-                "subject_id": row["SUBJECT_ID"],
-                "hadm_id": row["HADM_ID"],
-                "chartdate": row["CHARTDATE"],
-                "chartime": row["CHARTTIME"],
-                "storetime": row["STORETIME"],
-                "category": row["CATEGORY"],
-                "description": row["DESCRIPTION"],
-                "cgid": row["CGID"],
-                "iserror": row["ISERROR"],
-                "text": row["TEXT"],
-            }
-            _id += 1
+        for df in df_chunks:
+            for row in df.to_dict("records"):
+                yield _id, {
+                    "row_id": row["ROW_ID"],
+                    "subject_id": row["SUBJECT_ID"],
+                    "hadm_id": row["HADM_ID"],
+                    "chartdate": row["CHARTDATE"],
+                    "chartime": row["CHARTTIME"],
+                    "storetime": row["STORETIME"],
+                    "category": row["CATEGORY"],
+                    "description": row["DESCRIPTION"],
+                    "cgid": row["CGID"],
+                    "iserror": row["ISERROR"],
+                    "text": row["TEXT"],
+                }
+                _id += 1
