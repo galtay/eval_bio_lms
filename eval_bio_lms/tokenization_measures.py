@@ -63,7 +63,10 @@ def main(
         data_files=str(note_events_path),
         split="train",
     )
-    ds = ds_full.select(range(num_samples))
+    if num_samples is None:
+        ds = ds_full
+    else:
+        ds = ds_full.select(range(num_samples))
 
     df_num_toks = pd.DataFrame()
     for model_def in MODEL_DEFS:
