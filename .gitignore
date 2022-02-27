@@ -1,6 +1,7 @@
 # local directories to ignore
 data
 eval
+sandbox
 plot_results_scratch.ipynb
 
 # Byte-compiled / optimized / DLL files

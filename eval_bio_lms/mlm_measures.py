@@ -5,8 +5,11 @@ Lets measure performance on the MLM task.
 * https://github.com/awslabs/mlm-scoring
 
 """
-import itertools
+import multiprocessing
+import os
+from pathlib import Path
 import math
+from typing import Optional
 
 from datasets import load_dataset, load_metric
 import pandas as pd
@@ -14,26 +17,15 @@ from transformers import AutoTokenizer
 from transformers import AutoModelForMaskedLM
 from transformers import Trainer, TrainingArguments
 from transformers import DataCollatorForLanguageModeling
+import typer
 
-from preprocessing import tokenize_map
-from preprocessing import group_texts_map
-
-
-data_files = (
-    "/home/galtay/data/mimic_sandbox/mimic-iii-clinical-database-1.4/NOTEEVENTS.csv.gz"
-)
-ds = load_dataset("mimic_noteevents.py", data_files=data_files, split="train")
-ds = ds.select(range(1000))
-TEXT_COL = "text"
-MAX_SEQ_LEN = 128
-NUM_PROC = 24
+from eval_bio_lms.model_definitions import MODEL_DEFS
+from eval_bio_lms.preprocessing import tokenize_map, group_texts_map
+from eval_bio_lms.dataset_loaders import mimic_noteevents
 
 
 def preprocess_logits_for_metrics(logits, labels):
     return logits.argmax(dim=-1)
-
-
-metric = load_metric("accuracy")
 
 
 def compute_metrics(eval_preds):
@@ -48,81 +40,134 @@ def compute_metrics(eval_preds):
     return metric.compute(predictions=preds, references=labels)
 
 
-model_names = [
-    "bert-base-uncased",
-    "bert-base-cased",
-    "roberta-base",
-    "dmis-lab/biobert-v1.1",
-    "allenai/scibert_scivocab_uncased",
-    "allenai/scibert_scivocab_cased",
-    "microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract",
-    "microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext",
-    "emilyalsentzer/Bio_ClinicalBERT",
-    "bionlp/bluebert_pubmed_mimic_uncased_L-24_H-1024_A-16",
-    "bionlp/bluebert_pubmed_uncased_L-12_H-768_A-12",
-]
+def main(
+    note_events_path: Path = typer.Argument(
+        ...,
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        help="Path to NOTEEVENTS.csv.gz",
+    ),
+    num_samples: Optional[int] = typer.Option(
+        None,
+        help="Number of samples to use. If not set, use all samples."
+    ),
+    text_col: str = typer.Option(
+        "text",
+        help="Name of text column."
+    ),
+    num_proc: int = typer.Option(
+        multiprocessing.cpu_count(),
+        help="Number of processors to use."
+    ),
+    max_seq_len: int = typer.Option(
+        128,
+        help="Maximum sequence length."
+    ),
+    tokenizer_batch_size: int = typer.Option(
+        1000,
+        help="Tokenizer batch size.",
+    ),
+    mlm_probability: float = typer.Option(
+        0.15,
+        help="Masked language modeling probability.",
+    ),
+    mlm_batch_size: int = typer.Option(
+        256,
+        help="GPU batch size",
+    ),
+    output_path: Path = typer.Option(
+        "data/mimic-corpus-mlm.csv",
+        file_okay=True,
+        dir_okay=False,
+        help="Path to output file.",
+    ),
+):
 
+    typer.echo(f"using note_events_path: {note_events_path}")
+    typer.echo(f"using num_samples: {num_samples}")
+    typer.echo(f"text_col: {text_col}")
+    typer.echo(f"num_proc: {num_proc}")
+    typer.echo(f"output_path: {output_path}")
 
-eval_dicts = []
-for model_name in model_names:
+    metric = load_metric("accuracy")
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-
-    # We use `return_special_tokens_mask=True` because it makes
-    # DataCollatorForLanguageModeling more efficient
-    ds_tokenized = ds.map(
-        tokenize_map,
-        batched=True,
-        num_proc=NUM_PROC,
-        remove_columns=ds.column_names,
-        fn_kwargs={
-            "tokenizer": tokenizer,
-            "text_col": TEXT_COL,
-            "return_special_tokens_mask": True,
-        },
+    ds_full = load_dataset(
+        mimic_noteevents.__file__,
+        data_files=str(note_events_path),
+        split="train",
     )
+    if num_samples is None:
+        ds = ds_full
+    else:
+        ds = ds_full.select(range(num_samples))
 
-    ds_lm = ds_tokenized.map(
-        group_texts_map,
-        batched=True,
-        batch_size=1000,
-        num_proc=NUM_PROC,
-        fn_kwargs={"max_seq_len": MAX_SEQ_LEN},
-    )
+    eval_dicts = []
+    for model_def in MODEL_DEFS:
 
-    model = AutoModelForMaskedLM.from_pretrained(model_name)
+        tokenizer = AutoTokenizer.from_pretrained(model_def["tokenizer_checkpoint"])
 
-    output_path = "./eval"
-    training_args = TrainingArguments(
-        output_path,
-        per_device_eval_batch_size=256,
-    )
+        # We use `return_special_tokens_mask=True` because it makes
+        # DataCollatorForLanguageModeling more efficient
+        ds_tokenized = ds.map(
+            tokenize_map,
+            batched=True,
+            batch_size=tokenizer_batch_size,
+            num_proc=num_proc,
+            remove_columns=ds.column_names,
+            fn_kwargs={
+                "tokenizer": tokenizer,
+                "text_col": text_col,
+                "return_special_tokens_mask": True,
+            },
+        )
 
-    data_collator = DataCollatorForLanguageModeling(
-        tokenizer=tokenizer,
-        mlm_probability=0.15,
-    )
+        ds_lm = ds_tokenized.map(
+            group_texts_map,
+            batched=True,
+            batch_size=tokenizer_batch_size,
+            num_proc=num_proc,
+            fn_kwargs={"max_seq_len": max_seq_len},
+        )
 
-    trainer = Trainer(
-        model=model,
-        args=training_args,
-        train_dataset=None,
-        eval_dataset=ds_lm,
-        data_collator=data_collator,
-        compute_metrics=compute_metrics,
-        preprocess_logits_for_metrics=preprocess_logits_for_metrics,
-    )
+        model = AutoModelForMaskedLM.from_pretrained(model_def["model_checkpoint"])
 
-    eval_dict = trainer.evaluate()
-    eval_dict["model_name"] = model_name
-    try:
-        perplexity = math.exp(eval_dict["eval_loss"])
-    except OverflowError:
-        perplexity = float("inf")
-    eval_dict["perplexity"] = perplexity
+        training_args = TrainingArguments(
+            "/tmp",
+            per_device_eval_batch_size=mlm_batch_size,
+        )
 
-    eval_dicts.append(eval_dict)
+        data_collator = DataCollatorForLanguageModeling(
+            tokenizer=tokenizer,
+            mlm_probability=mlm_probability,
+        )
+
+        trainer = Trainer(
+            model=model,
+            args=training_args,
+            train_dataset=None,
+            eval_dataset=ds_lm,
+            data_collator=data_collator,
+#            compute_metrics=compute_metrics,
+#            preprocess_logits_for_metrics=preprocess_logits_for_metrics,
+        )
+
+        eval_dict = trainer.evaluate()
+        eval_dict["model_name"] = model_def["name"]
+        eval_dict["num_seq"] = len(ds_lm)
+        try:
+            perplexity = math.exp(eval_dict["eval_loss"])
+        except OverflowError:
+            perplexity = float("inf")
+        eval_dict["perplexity"] = perplexity
+
+        eval_dicts.append(eval_dict)
 
 
-df_eval = pd.DataFrame(eval_dicts)
-df_eval.to_csv("data/mlm_measures.csv", index=False)
+    df_eval = pd.DataFrame(eval_dicts)
+    os.makedirs(output_path.parent, exist_ok=True)
+    df_eval.to_csv(output_path, index=False)
+
+
+if __name__ == "__main__":
+    typer.run(main)
