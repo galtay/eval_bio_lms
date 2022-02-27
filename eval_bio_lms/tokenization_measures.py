@@ -45,7 +45,7 @@ def main(
         help="Number of processors to use."
     ),
     output_path: Path = typer.Option(
-        "data/mimic-corpus_token_counts.csv",
+        "data/mimic-corpus-token-counts.csv",
         file_okay=True,
         dir_okay=False,
         help="Path to output file.",
