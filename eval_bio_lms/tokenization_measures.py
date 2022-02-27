@@ -8,6 +8,7 @@ What can we measure with just the tokenizer?
 import multiprocessing
 import os
 from pathlib import Path
+from typing import Optional
 
 from datasets import load_dataset
 import pandas as pd
@@ -19,6 +20,10 @@ from eval_bio_lms.preprocessing import tokenize_map
 from eval_bio_lms.dataset_loaders import mimic_noteevents
 
 
+def count_tokens_map(examples):
+    return {"num_tokens": [len(el) for el in examples["input_ids"]]}
+
+
 def main(
     note_events_path: Path = typer.Argument(
         ...,
@@ -27,9 +32,9 @@ def main(
         dir_okay=False,
         help="Path to NOTEEVENTS.csv.gz",
     ),
-    num_samples: int = typer.Option(
-        10_000,
-        help="Number of samples to use."
+    num_samples: Optional[int] = typer.Option(
+        None,
+        help="Number of samples to use. If not set, use all samples."
     ),
     text_col: str = typer.Option(
         "text",
@@ -40,7 +45,7 @@ def main(
         help="Number of processors to use."
     ),
     output_path: Path = typer.Option(
-        "data/corpus_token_counts.csv",
+        "data/mimic-corpus_token_counts.csv",
         file_okay=True,
         dir_okay=False,
         help="Path to output file.",
@@ -65,21 +70,24 @@ def main(
 
         tokenizer = AutoTokenizer.from_pretrained(model_def["tokenizer_checkpoint"])
 
-        # normally we drop all input columns
-        # keeping text column here just for convenience
         ds_tokenized = ds.map(
             tokenize_map,
             batched=True,
             num_proc=num_proc,
-            remove_columns=[col for col in ds.column_names if col != text_col],
+            remove_columns=ds.column_names,
             fn_kwargs={
                 "tokenizer": tokenizer,
                 "text_col": text_col,
             },
         )
 
-        df = ds_tokenized.to_pandas()
-        df_num_toks[model_def["name"]] = df["input_ids"].apply(len)
+        ds_counts = ds_tokenized.map(
+            count_tokens_map,
+            batched=True,
+            num_proc=num_proc,
+            remove_columns=ds_tokenized.column_names
+        )
+        df_num_toks[model_def["name"]] = ds_counts["num_tokens"]
 
     os.makedirs(output_path.parent, exist_ok=True)
     df_num_toks.to_csv(output_path, index=False)
