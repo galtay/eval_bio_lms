@@ -29,7 +29,7 @@ MODEL_DEFS = [
     {
         "tokenizer_checkpoint": "dmis-lab/biobert-base-cased-v1.2",
         "model_checkpoint": "dmis-lab/biobert-base-cased-v1.2",
-        "name": "biobert-v1.2",
+        "name": "biobert-base-cased-v1.2",
         "cased": True,
     },
     {
