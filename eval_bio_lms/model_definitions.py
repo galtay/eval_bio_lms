@@ -27,9 +27,9 @@ MODEL_DEFS = [
         "cased": True,
     },
     {
-        "tokenizer_checkpoint": "dmis-lab/biobert-v1.1",
-        "model_checkpoint": "dmis-lab/biobert-v1.1",
-        "name": "biobert-v1.1",
+        "tokenizer_checkpoint": "dmis-lab/biobert-base-cased-v1.2",
+        "model_checkpoint": "dmis-lab/biobert-base-cased-v1.2",
+        "name": "biobert-v1.2",
         "cased": True,
     },
     {
