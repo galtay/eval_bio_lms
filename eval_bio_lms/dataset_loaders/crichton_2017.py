@@ -5,10 +5,12 @@ https://bmcbioinformatics.biomedcentral.com/articles/10.1186/s12859-017-1776-8
 import json
 import os
 import pathlib
+import random
 from typing import List
 
 import datasets
-from datasets import Features, Sequence, Value
+from datasets import ClassLabel, Dataset, Features, Sequence, Value
+import pandas as pd
 
 
 _CITATION = ""
@@ -500,6 +502,28 @@ CLASS_LABELS = {
     "NCBI-disease-IOB": ["B-Disease", "I-Disease", "O"],
     "NCBI-disease-IOBES": ["B-Disease", "E-Disease", "I-Disease", "O", "S-Disease"],
 }
+
+
+def _show_random_elements(
+    dataset: Dataset,
+    num_examples: int=10
+) -> pd.DataFrame:
+    assert num_examples <= len(dataset), "Can't pick more elements than there are in the dataset."
+    picks = []
+    for _ in range(num_examples):
+        pick = random.randint(0, len(dataset)-1)
+        while pick in picks:
+            pick = random.randint(0, len(dataset)-1)
+        picks.append(pick)
+
+    df = pd.DataFrame(dataset[picks])
+    for column, typ in dataset.features.items():
+        if isinstance(typ, ClassLabel):
+            df[column] = df[column].transform(lambda i: typ.names[i])
+        elif isinstance(typ, Sequence) and isinstance(typ.feature, ClassLabel):
+            df[column] = df[column].transform(lambda x: [typ.feature.names[i] for i in x])
+
+    return df
 
 
 def _parse_file(file_path):

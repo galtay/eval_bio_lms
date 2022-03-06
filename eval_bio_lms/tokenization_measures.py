@@ -44,6 +44,10 @@ def main(
         multiprocessing.cpu_count(),
         help="Number of processors to use."
     ),
+    tokenizer_batch_size: int = typer.Option(
+        1000,
+        help="Tokenizer batch size.",
+    ),
     output_path: Path = typer.Option(
         "data/mimic-corpus-token-counts.csv",
         file_okay=True,
@@ -73,14 +77,18 @@ def main(
 
         tokenizer = AutoTokenizer.from_pretrained(model_def["tokenizer_checkpoint"])
 
+        # We dont need `return_special_tokens_mask=True` here but we will
+        # later and this will allow us to use the cached result
         ds_tokenized = ds.map(
             tokenize_map,
             batched=True,
+            batch_size=tokenizer_batch_size,
             num_proc=num_proc,
             remove_columns=ds.column_names,
             fn_kwargs={
                 "tokenizer": tokenizer,
                 "text_col": text_col,
+                "return_special_tokens_mask": True,
             },
         )
 
