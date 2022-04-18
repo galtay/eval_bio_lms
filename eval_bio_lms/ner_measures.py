@@ -22,7 +22,8 @@ from transformers import Trainer, TrainingArguments
 from transformers import DataCollatorForTokenClassification
 import typer
 
-from eval_bio_lms.model_definitions import MODEL_DEFS
+from eval_bio_lms.model_utilities import MODEL_DEFS
+from eval_bio_lms.model_utilities import load_tokenizer
 from eval_bio_lms.preprocessing import tokenize_map, group_texts_map
 from eval_bio_lms.dataset_loaders import crichton_2017
 
@@ -201,11 +202,15 @@ def main(
         for model_def in MODEL_DEFS:
 
             this_max_seq_len = max_seq_len or model_def["max_seq_len"]
-            tokenizer = AutoTokenizer.from_pretrained(
-                model_def["tokenizer_checkpoint"],
-                model_max_length=this_max_seq_len,
-                **SPECIAL_TOKENIZER_KWARGS.get(model_def["name"], {})
+            tokenizer = load_tokenizer(
+                model_def,
+                **SPECIAL_TOKENIZER_KWARGS.get(model_def["name"], {}),
             )
+#            tokenizer = AutoTokenizer.from_pretrained(
+#                model_def["tokenizer_checkpoint"],
+#                model_max_length=this_max_seq_len,
+#                **SPECIAL_TOKENIZER_KWARGS.get(model_def["name"], {})
+#            )
 
             ds_tokenized = ds.map(
                 tokenize_and_align_labels,

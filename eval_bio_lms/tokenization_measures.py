@@ -12,10 +12,10 @@ from typing import Optional
 
 from datasets import load_dataset
 import pandas as pd
-from transformers import AutoTokenizer
 import typer
 
-from eval_bio_lms.model_definitions import MODEL_DEFS
+from eval_bio_lms.model_utilities import MODEL_DEFS
+from eval_bio_lms.model_utilities import load_tokenizer
 from eval_bio_lms.preprocessing import tokenize_map
 from eval_bio_lms.dataset_loaders import mimic_noteevents
 
@@ -75,7 +75,7 @@ def main(
     df_num_toks = pd.DataFrame()
     for model_def in MODEL_DEFS:
 
-        tokenizer = AutoTokenizer.from_pretrained(model_def["tokenizer_checkpoint"])
+        tokenizer = load_tokenizer(model_def)
 
         # We dont need `return_special_tokens_mask=True` here but we will
         # later and this will allow us to use the cached result

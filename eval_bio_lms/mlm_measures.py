@@ -19,9 +19,14 @@ from transformers import Trainer, TrainingArguments
 from transformers import DataCollatorForLanguageModeling
 import typer
 
-from eval_bio_lms.model_definitions import MODEL_DEFS
-from eval_bio_lms.preprocessing import tokenize_map, group_texts_map
+from eval_bio_lms.model_utilities import MODEL_DEFS
+from eval_bio_lms.model_utilities import load_tokenizer
+from eval_bio_lms.preprocessing import tokenize_map
+from eval_bio_lms.preprocessing import group_texts_map
 from eval_bio_lms.dataset_loaders import mimic_noteevents
+
+
+metric = load_metric("accuracy")
 
 
 def preprocess_logits_for_metrics(logits, labels):
@@ -90,8 +95,6 @@ def main(
     typer.echo(f"num_proc: {num_proc}")
     typer.echo(f"output_path: {output_path}")
 
-    metric = load_metric("accuracy")
-
     ds_full = load_dataset(
         mimic_noteevents.__file__,
         data_files=str(note_events_path),
@@ -105,7 +108,7 @@ def main(
     eval_dicts = []
     for model_def in MODEL_DEFS:
 
-        tokenizer = AutoTokenizer.from_pretrained(model_def["tokenizer_checkpoint"])
+        tokenizer = load_tokenizer(model_def)
 
         # We use `return_special_tokens_mask=True` because it makes
         # DataCollatorForLanguageModeling more efficient
@@ -148,8 +151,8 @@ def main(
             train_dataset=None,
             eval_dataset=ds_lm,
             data_collator=data_collator,
-#            compute_metrics=compute_metrics,
-#            preprocess_logits_for_metrics=preprocess_logits_for_metrics,
+            compute_metrics=compute_metrics,
+            preprocess_logits_for_metrics=preprocess_logits_for_metrics,
         )
 
         eval_dict = trainer.evaluate()
