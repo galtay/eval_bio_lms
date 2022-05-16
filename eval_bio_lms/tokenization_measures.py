@@ -12,6 +12,7 @@ from typing import Optional
 
 from datasets import load_dataset
 import pandas as pd
+from rich import print
 import typer
 
 from eval_bio_lms.model_utilities import MODEL_DEFS
