@@ -7,6 +7,8 @@ For this reason, we manually set model parameters.
 """
 from dataclasses import dataclass
 from transformers import AutoTokenizer
+from transformers import AutoModelForMaskedLM
+from transformers import AutoModelForTokenClassification
 
 
 @dataclass
@@ -18,8 +20,32 @@ class HuggingFaceModelDefinition:
     max_seq_len: int
     arxiv: str
 
+    def load_tokenizer(self, **kwargs):
+        tokenizer = AutoTokenizer.from_pretrained(
+            self.tokenizer_checkpoint,
+            do_lower_case = not self.cased,
+            model_max_length = self.max_seq_len,
+            **kwargs,
+        )
+        return tokenizer
 
-MODEL_DEFS = [
+    def load_masked_lm(self, **kwargs):
+        model = AutoModelForMaskedLM.from_pretrained(
+            self.model_checkpoint,
+            **kwargs,
+        )
+        return model
+
+    def load_token_classification(self, num_labels, **kwargs):
+        model = AutoModelForTokenClassification.from_pretrained(
+            self.model_checkpoint,
+            num_labels=num_labels,
+            **kwargs,
+        )
+        return model
+
+
+MODEL_DEF_DICTS = [
     {
         "name": "BioLinkBERT-base",
         "tokenizer_checkpoint": "michiyasunaga/BioLinkBERT-base",
@@ -28,10 +54,18 @@ MODEL_DEFS = [
         "max_seq_len": 512,
         "arxiv": "https://arxiv.org/abs/2203.15827",
     },
+#    {
+#        "name": "BioLinkBERT-large",
+#        "tokenizer_checkpoint": "michiyasunaga/BioLinkBERT-large",
+#        "model_checkpoint": "michiyasunaga/BioLinkBERT-large",
+#        "cased": False,
+#        "max_seq_len": 512,
+#        "arxiv": "https://arxiv.org/abs/2203.15827",
+#    },
     {
         "name": "BioLinkBERT-large",
-        "tokenizer_checkpoint": "michiyasunaga/BioLinkBERT-large",
-        "model_checkpoint": "michiyasunaga/BioLinkBERT-large",
+        "tokenizer_checkpoint": "/home/galtay/data/bio-link-bert/BioLinkBERT-large-with-heads",
+        "model_checkpoint": "/home/galtay/data/bio-link-bert/BioLinkBERT-large-with-heads",
         "cased": False,
         "max_seq_len": 512,
         "arxiv": "https://arxiv.org/abs/2203.15827",
@@ -113,7 +147,7 @@ MODEL_DEFS = [
         "tokenizer_checkpoint": "emilyalsentzer/Bio_ClinicalBERT",
         "model_checkpoint": "emilyalsentzer/Bio_ClinicalBERT",
         "cased": False,
-        "max_seq_len": 512,
+        "max_seq_len": 128,
         "arxiv": "https://arxiv.org/abs/1904.03323",
     },
     {
@@ -151,10 +185,7 @@ MODEL_DEFS = [
 ]
 
 
-def load_tokenizer(model_def, **kwargs):
-    tokenizer = AutoTokenizer.from_pretrained(
-        model_def["tokenizer_checkpoint"],
-        do_lower_case = not model_def["cased"],
-        **kwargs,
-    )
-    return tokenizer
+MODEL_DEFS = [
+    HuggingFaceModelDefinition(**kwargs)
+    for kwargs in MODEL_DEF_DICTS
+]

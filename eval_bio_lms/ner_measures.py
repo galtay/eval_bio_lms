@@ -23,7 +23,6 @@ from transformers import DataCollatorForTokenClassification
 import typer
 
 from eval_bio_lms.model_utilities import MODEL_DEFS
-from eval_bio_lms.model_utilities import load_tokenizer
 from eval_bio_lms.preprocessing import tokenize_map, group_texts_map
 from eval_bio_lms.dataset_loaders import crichton_2017
 
@@ -34,7 +33,8 @@ IGNORED_INDEX = -100
 
 # NOTE NEED add_prefix_space=True for roberta if using is_split_into_words=True
 SPECIAL_TOKENIZER_KWARGS = {
-    "roberta-base": {"add_prefix_space": True}
+    "roberta-base": {"add_prefix_space": True},
+    "roberta-large": {"add_prefix_space": True},
 }
 
 
@@ -169,7 +169,7 @@ def main(
         help="Number of processors to use."
     ),
     max_seq_len: Optional[int] = typer.Option(
-        None,
+        128,
         help="Maximum sequence length."
     ),
     tokenizer_batch_size: int = typer.Option(
@@ -201,16 +201,9 @@ def main(
 
         for model_def in MODEL_DEFS:
 
-            this_max_seq_len = max_seq_len or model_def["max_seq_len"]
-            tokenizer = load_tokenizer(
-                model_def,
-                **SPECIAL_TOKENIZER_KWARGS.get(model_def["name"], {}),
+            tokenizer = model_def.load_tokenizer(
+                **SPECIAL_TOKENIZER_KWARGS.get(model_def.name, {}),
             )
-#            tokenizer = AutoTokenizer.from_pretrained(
-#                model_def["tokenizer_checkpoint"],
-#                model_max_length=this_max_seq_len,
-#                **SPECIAL_TOKENIZER_KWARGS.get(model_def["name"], {})
-#            )
 
             ds_tokenized = ds.map(
                 tokenize_and_align_labels,
@@ -223,15 +216,13 @@ def main(
                     "tokenizer": tokenizer,
                 },
             )
-
-            model = AutoModelForTokenClassification.from_pretrained(
-                model_def["model_checkpoint"],
+            model = model_def.load_token_classification(
                 num_labels=len(label_list),
             )
 
-            model_name = model_def["model_checkpoint"].split("/")[-1]
+            model_name = model_def.model_checkpoint.split("/")[-1]
             args = TrainingArguments(
-                os.path.join("ner_output", f"{model_name}-finetuned-ner"),
+                os.path.join("ner_output_logs", f"{model_name}-finetuned-ner"),
                 evaluation_strategy = "epoch",
                 learning_rate=2e-5,
                 per_device_train_batch_size=ner_batch_size,
@@ -258,13 +249,13 @@ def main(
             predictions, labels, _ = trainer.predict(ds_tokenized["test"])
             results = compute_metrics((predictions, labels))
 
-            results["model_def_name"] = model_def["name"]
+            results["model_def_name"] = model_def.name
             results["subset_name"] = subset_name
 
-            key = f"{model_def['name']}-{subset_name}"
+            key = f"{model_def.name}-{subset_name}"
             final_results[key] = results
 
-    with open("data/crichton-2017-ner.json", "w") as fp:
+    with open("ner_output/crichton-2017-ner.json", "w") as fp:
         json.dump(final_results, fp, indent=4, cls=NumpyEncoder)
 
 #    return final_results

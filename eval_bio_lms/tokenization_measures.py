@@ -16,7 +16,6 @@ from rich import print
 import typer
 
 from eval_bio_lms.model_utilities import MODEL_DEFS
-from eval_bio_lms.model_utilities import load_tokenizer
 from eval_bio_lms.preprocessing import tokenize_map
 from eval_bio_lms.dataset_loaders import mimic_noteevents
 
@@ -34,7 +33,7 @@ def main(
         help="Path to NOTEEVENTS.csv.gz",
     ),
     num_samples: Optional[int] = typer.Option(
-        None,
+        10_000,
         help="Number of samples to use. If not set, use all samples."
     ),
     text_col: str = typer.Option(
@@ -49,19 +48,12 @@ def main(
         1000,
         help="Tokenizer batch size.",
     ),
-    output_path: Path = typer.Option(
-        "data/mimic-corpus-token-counts.csv",
-        file_okay=True,
-        dir_okay=False,
-        help="Path to output file.",
-    ),
 ):
 
     typer.echo(f"using note_events_path: {note_events_path}")
     typer.echo(f"using num_samples: {num_samples}")
     typer.echo(f"text_col: {text_col}")
     typer.echo(f"num_proc: {num_proc}")
-    typer.echo(f"output_path: {output_path}")
 
     ds_full = load_dataset(
         mimic_noteevents.__file__,
@@ -71,12 +63,13 @@ def main(
     if num_samples is None:
         ds = ds_full
     else:
-        ds = ds_full.select(range(num_samples))
+        ds = ds_full.shuffle(seed=42)
+        ds = ds.select(range(num_samples))
 
     df_num_toks = pd.DataFrame()
     for model_def in MODEL_DEFS:
 
-        tokenizer = load_tokenizer(model_def)
+        tokenizer = model_def.load_tokenizer()
 
         # We dont need `return_special_tokens_mask=True` here but we will
         # later and this will allow us to use the cached result
@@ -99,10 +92,15 @@ def main(
             num_proc=num_proc,
             remove_columns=ds_tokenized.column_names
         )
-        df_num_toks[model_def["name"]] = ds_counts["num_tokens"]
+        df_num_toks[model_def.name] = ds_counts["num_tokens"]
 
-    os.makedirs(output_path.parent, exist_ok=True)
-    df_num_toks.to_csv(output_path, index=False)
+    output_path = Path("tokenization_output")
+    output_path.mkdir(exist_ok=True)
+    if num_samples is None:
+        output_file = output_path / "mimic-corpus-token-counts.csv"
+    else:
+        output_file = output_path / f"mimic-corpus-token-counts-num-samples-{num_samples}.csv"
+    df_num_toks.to_csv(output_file, index=False)
 
 
 if __name__ == "__main__":
